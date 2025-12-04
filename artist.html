@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artist Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Circular+Std:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #121212; color: white; font-family: 'Inter', sans-serif; padding-bottom: 50px; }
+        .upload-card { background-color: #181818; border-radius: 12px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .form-control { background-color: #3e3e3e; border: 1px solid transparent; color: white; padding: 12px; }
+        .form-control:focus { background-color: #3e3e3e; color: white; border-color: #1db954; }
+        .btn-spotify { background-color: #1db954; color: black; font-weight: 700; border-radius: 50px; padding: 14px 32px; border: none; width: 100%; }
+        .btn-spotify:hover { background-color: #1ed760; transform: scale(1.02); }
+        #loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+    </style>
+</head>
+<body>
+    <div id="loadingOverlay">
+        <div class="spinner-border text-success" style="width: 4rem; height: 4rem;"></div>
+        <h4 class="mt-4 fw-bold" id="loadingText">Processing...</h4>
+    </div>
+
+    <nav class="navbar sticky-top bg-black p-3">
+        <div class="container">
+            <span class="h4 fw-bold mb-0"><a href="index.html" class="text-white text-decoration-none"><i class="fab fa-spotify text-success me-2"></i> Artist Studio</a></span>
+            <button id="connectBtn" class="btn btn-outline-light rounded-pill fw-bold">Connect Wallet</button>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="upload-card">
+                    <h2 class="fw-bold mb-4 text-center">Release New Track</h2>
+                    <div class="mb-3"><label>Title</label><input type="text" id="songTitle" class="form-control" placeholder="Song Title"></div>
+                    <div class="mb-3"><label>Artist</label><input type="text" id="artistName" class="form-control" placeholder="Artist Name"></div>
+                    <div class="mb-3"><label>Price (ETH)</label><input type="number" id="songPrice" class="form-control" step="0.0001" placeholder="0.0001"></div>
+                    <div class="mb-4"><label>Audio File</label><input type="file" id="audioFile" class="form-control" accept="audio/*"></div>
+                    <button class="btn btn-spotify" onclick="processUpload()">Distribute to Blockchain</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.10.0/web3.min.js"></script>
+    <script>
+        let web3, contract, userAccount;
+
+        // ================= CONFIG (WAJIB DIGANTI!) =================
+        const TARGET_CHAIN_ID = 1337; // Ganti dengan Chain ID UGM (misal 1234)
+        const RPC_URL = "http://127.0.0.1:7545"; // Ganti dengan IP UGM
+        const contractAddress = "0x3E9ccf8ec10Eab2DD38578bBCe477aD5A67C8B0b"; // Ganti Address Baru
+        const PINATA_JWT = "ey...."; 
+        // ===========================================================
+
+        const contractABI = [{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"songId","type":"uint256"},{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"SongSold","type":"event"},{"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"buySong","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"getSongCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_songId","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"isOwner","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"songOwners","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"songs","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"string","name":"title","type":"string"},{"internalType":"string","name":"artistName","type":"string"},{"internalType":"string","name":"ipfsCid","type":"string"},{"internalType":"uint256","name":"price","type":"uint256"},{"internalType":"address payable","name":"artistWallet","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_title","type":"string"},{"internalType":"string","name":"_artistName","type":"string"},{"internalType":"string","name":"_ipfsCid","type":"string"},{"internalType":"uint256","name":"_price","type":"uint256"}],"name":"uploadSong","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    userAccount = accounts[0];
+
+                    // Auto Switch Network
+                    const currentChainId = await web3.eth.getChainId();
+                    if (Number(currentChainId) !== TARGET_CHAIN_ID) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID) }],
+                            });
+                        } catch (switchError) {
+                            if (switchError.code === 4902) {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID), chainName: 'Music Network', rpcUrls: [RPC_URL], nativeCurrency: { name: 'Token', symbol: 'ETH', decimals: 18 } }],
+                                });
+                            }
+                        }
+                    }
+                    
+                    document.getElementById('connectBtn').innerText = userAccount.substring(0,6)+"...";
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+                } catch (err) { alert(err.message); }
+            } else { alert("Install MetaMask!"); }
+        });
+
+        async function processUpload() {
+            if (!contract) return alert("Connect Wallet First!");
+            const fileInput = document.getElementById('audioFile');
+            if (fileInput.files.length === 0) return alert("Select MP3 file!");
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            try {
+                // 1. Upload Pinata
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                const res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${PINATA_JWT}` },
+                    body: formData
+                });
+                const result = await res.json();
+                if(!result.IpfsHash) throw new Error("Pinata Failed");
+
+                // 2. Upload Blockchain
+                const title = document.getElementById('songTitle').value;
+                const artist = document.getElementById('artistName').value;
+                const priceWei = web3.utils.toWei(document.getElementById('songPrice').value, 'ether');
+
+                await contract.methods.uploadSong(title, artist, result.IpfsHash, priceWei).send({ from: userAccount });
+                alert("Success!");
+                location.reload();
+            } catch (err) { console.error(err); alert("Error: " + err.message); } 
+            finally { document.getElementById('loadingOverlay').style.display = 'none'; }
+        }
+    </script>
+</body>
+</html>

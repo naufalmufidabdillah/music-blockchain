@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web3 Music Player</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #121212; color: white; padding-bottom: 100px; font-family: sans-serif; }
+        .song-card { background-color: #181818; padding: 20px; border-radius: 8px; transition: 0.3s; cursor: pointer; height: 100%; }
+        .song-card:hover { background-color: #282828; }
+        .album-art { width: 100%; height: 150px; background-color: #333; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 15px; border-radius: 4px; }
+        .bottom-player { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #181818; border-top: 1px solid #333; padding: 15px; display: none; z-index: 100; align-items: center; justify-content: space-between;}
+        .btn-action { border-radius: 50px; width: 100%; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar sticky-top bg-black p-3">
+        <div class="container-fluid">
+            <span class="navbar-brand fw-bold"><a href="index.html" class="text-white text-decoration-none"><i class="fab fa-spotify text-success"></i> Web3 Music</a></span>
+            <button id="connectBtn" class="btn btn-outline-light rounded-pill fw-bold">Connect Wallet</button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h3 class="fw-bold mb-4">Discover</h3>
+        <p id="statusMsg" class="text-secondary">Please connect wallet to access library.</p>
+        <div id="songList" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4"></div>
+    </div>
+
+    <div id="bottomPlayer" class="bottom-player">
+        <div class="d-flex align-items-center" style="width: 30%;">
+            <div class="bg-secondary rounded me-3 d-flex align-items-center justify-content-center" style="width:50px; height:50px;">🎵</div>
+            <div style="overflow: hidden; white-space: nowrap;">
+                <h6 class="m-0 text-truncate" id="pTitle">Title</h6>
+                <small class="text-secondary text-truncate" id="pArtist">Artist</small>
+            </div>
+        </div>
+        <audio id="audioElement" controls autoplay style="width: 40%;"></audio>
+        <div class="text-success small fw-bold text-end" style="width: 30%;">Verified Owner <i class="fas fa-check-circle"></i></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.10.0/web3.min.js"></script>
+    <script>
+        let web3, contract, userAccount;
+        
+        // ================= CONFIG (SAMAKAN DENGAN ARTIST.HTML) =================
+        const TARGET_CHAIN_ID = 1337; 
+        const RPC_URL = "http://127.0.0.1:7545";
+        const contractAddress = "0x3E9ccf8ec10Eab2DD38578bBCe477aD5A67C8B0b"; 
+        // =======================================================================
+
+        const contractABI = [{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"songId","type":"uint256"},{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"SongSold","type":"event"},{"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"buySong","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"getSongCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_songId","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"isOwner","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"songOwners","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"songs","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"string","name":"title","type":"string"},{"internalType":"string","name":"artistName","type":"string"},{"internalType":"string","name":"ipfsCid","type":"string"},{"internalType":"uint256","name":"price","type":"uint256"},{"internalType":"address payable","name":"artistWallet","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_title","type":"string"},{"internalType":"string","name":"_artistName","type":"string"},{"internalType":"string","name":"_ipfsCid","type":"string"},{"internalType":"uint256","name":"_price","type":"uint256"}],"name":"uploadSong","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    userAccount = accounts[0];
+
+                    // Auto Switch Network
+                    const currentChainId = await web3.eth.getChainId();
+                    if (Number(currentChainId) !== TARGET_CHAIN_ID) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID) }],
+                            });
+                        } catch (switchError) {
+                            if (switchError.code === 4902) {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID), chainName: 'Music Network', rpcUrls: [RPC_URL], nativeCurrency: { name: 'Token', symbol: 'ETH', decimals: 18 } }],
+                                });
+                            }
+                        }
+                    }
+
+                    document.getElementById('connectBtn').innerText = userAccount.substring(0,6)+"...";
+                    document.getElementById('statusMsg').style.display = 'none';
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+                    loadSongs();
+                } catch (err) { alert(err.message); }
+            } else { alert("Install MetaMask!"); }
+        });
+
+        async function loadSongs() {
+            const list = document.getElementById('songList');
+            list.innerHTML = `<div class="text-center w-100 mt-5"><div class="spinner-border text-success"></div></div>`;
+            try {
+                const count = await contract.methods.getSongCount().call();
+                list.innerHTML = "";
+                if(count == 0) list.innerHTML = `<div class="text-center w-100 mt-5 text-secondary">No songs yet.</div>`;
+
+                for (let i = 0; i < count; i++) {
+                    const song = await contract.methods.songs(i).call();
+                    const isOwned = await contract.methods.isOwner(i, userAccount).call();
+                    renderCard(song, i, isOwned);
+                }
+            } catch (err) { list.innerHTML = `<div class="text-danger text-center w-100">Load Error. Check Network.</div>`; }
+        }
+
+        function renderCard(song, index, isOwned) {
+            const priceEth = web3.utils.fromWei(song.price, 'ether');
+            const btnHtml = isOwned 
+                ? `<button class="btn btn-success btn-action shadow" onclick="playSong('${song.title}', '${song.artistName}', '${song.ipfsCid}')"><i class="fas fa-play"></i> PLAY</button>`
+                : `<button class="btn btn-light btn-action" onclick="buySong(${index}, '${song.price}')">BUY ${priceEth} ETH</button>`;
+
+            const html = `<div class="col"><div class="song-card"><div class="album-art">🎵</div><h5 class="fw-bold mb-1 text-truncate">${song.title}</h5><p class="text-secondary small mb-3 text-truncate">${song.artistName}</p>${btnHtml}</div></div>`;
+            document.getElementById('songList').innerHTML += html;
+        }
+
+        window.buySong = async (id, price) => {
+            try {
+                await contract.methods.buySong(id).send({ from: userAccount, value: price });
+                alert("Bought! You own this song.");
+                loadSongs(); 
+            } catch (err) { alert("Transaction Failed"); }
+        };
+
+        window.playSong = (title, artist, cid) => {
+            document.getElementById('bottomPlayer').style.display = 'flex';
+            document.getElementById('pTitle').innerText = title;
+            document.getElementById('pArtist').innerText = artist;
+            const audio = document.getElementById('audioElement');
+            audio.src = `https://ipfs.io/ipfs/${cid}`; // Gateway Stabil
+            audio.play().catch(e => alert("Audio Error: " + e.message));
+        }
+    </script>
+</body>
+</html>
