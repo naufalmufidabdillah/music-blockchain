@@ -49,12 +49,12 @@
     <script>
         let web3, contract, userAccount;
 
-        // ================= CONFIG (WAJIB DIGANTI!) =================
-        const TARGET_CHAIN_ID = 1337; // Ganti dengan Chain ID UGM (misal 1234)
-        const RPC_URL = "http://127.0.0.1:7545"; // Ganti dengan IP UGM
-        const contractAddress = "0x3E9ccf8ec10Eab2DD38578bBCe477aD5A67C8B0b"; // Ganti Address Baru
-        const PINATA_JWT = "ey...."; 
-        // ===========================================================
+        // ================= CONFIG SEPOLIA =================
+        const TARGET_CHAIN_ID = 11155111; // ID Resmi Sepolia
+        const RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"; // Public RPC Sepolia
+        const contractAddress = "0x07a91d8FB55b49f4c7E656EAbaD9F73EE95c520A"; 
+        const PINATA_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI5MDU2YTk1MS1jZDBkLTQxNjgtOWNhYy0xY2I3NTc1YmY2YTYiLCJlbWFpbCI6Im5hdWZhbC5tdWZpZGFiZEBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiMmFjNGU4NGVmOTIwNmEwOWEwYzgiLCJzY29wZWRLZXlTZWNyZXQiOiJlOGJjNGU1N2Y4YjM3ODk3OGRmOTQ5ZmNiMmRmZTYyZjFkZWQ2ZDc1NmM2Y2ZkOTE0ZTdjODkzYTU5MjM4ODAxIiwiZXhwIjoxNzk2MTk0OTM0fQ.QRmdT-He_1ThsV1vkScucVrjF0G8lYZ-vb8U5FOX0ng"; 
+        // ==================================================
 
         const contractABI = [{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"songId","type":"uint256"},{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"SongSold","type":"event"},{"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"buySong","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"getSongCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_songId","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"isOwner","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"songOwners","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"songs","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"string","name":"title","type":"string"},{"internalType":"string","name":"artistName","type":"string"},{"internalType":"string","name":"ipfsCid","type":"string"},{"internalType":"uint256","name":"price","type":"uint256"},{"internalType":"address payable","name":"artistWallet","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_title","type":"string"},{"internalType":"string","name":"_artistName","type":"string"},{"internalType":"string","name":"_ipfsCid","type":"string"},{"internalType":"uint256","name":"_price","type":"uint256"}],"name":"uploadSong","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
@@ -65,7 +65,7 @@
                     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                     userAccount = accounts[0];
 
-                    // Auto Switch Network
+                    // Auto Switch to SEPOLIA
                     const currentChainId = await web3.eth.getChainId();
                     if (Number(currentChainId) !== TARGET_CHAIN_ID) {
                         try {
@@ -74,10 +74,17 @@
                                 params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID) }],
                             });
                         } catch (switchError) {
+                            // Sepolia usually exists in MM, but if not:
                             if (switchError.code === 4902) {
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
-                                    params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID), chainName: 'Music Network', rpcUrls: [RPC_URL], nativeCurrency: { name: 'Token', symbol: 'ETH', decimals: 18 } }],
+                                    params: [{ 
+                                        chainId: web3.utils.toHex(TARGET_CHAIN_ID), 
+                                        chainName: 'Sepolia Testnet', 
+                                        rpcUrls: [RPC_URL], 
+                                        nativeCurrency: { name: 'SepoliaETH', symbol: 'ETH', decimals: 18 },
+                                        blockExplorerUrls: ['https://sepolia.etherscan.io']
+                                    }],
                                 });
                             }
                         }
@@ -107,13 +114,13 @@
                 const result = await res.json();
                 if(!result.IpfsHash) throw new Error("Pinata Failed");
 
-                // 2. Upload Blockchain
+                // 2. Upload Blockchain (Sepolia)
                 const title = document.getElementById('songTitle').value;
                 const artist = document.getElementById('artistName').value;
                 const priceWei = web3.utils.toWei(document.getElementById('songPrice').value, 'ether');
 
                 await contract.methods.uploadSong(title, artist, result.IpfsHash, priceWei).send({ from: userAccount });
-                alert("Success!");
+                alert("Success! Song is live on Sepolia Network.");
                 location.reload();
             } catch (err) { console.error(err); alert("Error: " + err.message); } 
             finally { document.getElementById('loadingOverlay').style.display = 'none'; }

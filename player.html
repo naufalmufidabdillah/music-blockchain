@@ -25,7 +25,7 @@
 
     <div class="container mt-4">
         <h3 class="fw-bold mb-4">Discover</h3>
-        <p id="statusMsg" class="text-secondary">Please connect wallet to access library.</p>
+        <p id="statusMsg" class="text-secondary">Please connect wallet to access library (Sepolia Network).</p>
         <div id="songList" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4"></div>
     </div>
 
@@ -45,11 +45,11 @@
     <script>
         let web3, contract, userAccount;
         
-        // ================= CONFIG (SAMAKAN DENGAN ARTIST.HTML) =================
-        const TARGET_CHAIN_ID = 1337; 
-        const RPC_URL = "http://127.0.0.1:7545";
-        const contractAddress = "0x3E9ccf8ec10Eab2DD38578bBCe477aD5A67C8B0b"; 
-        // =======================================================================
+        // ================= CONFIG SEPOLIA =================
+        const TARGET_CHAIN_ID = 11155111; 
+        const RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+        const contractAddress = "0x07a91d8FB55b49f4c7E656EAbaD9F73EE95c520A"; 
+        // ==================================================
 
         const contractABI = [{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"songId","type":"uint256"},{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"SongSold","type":"event"},{"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"buySong","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"getSongCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_songId","type":"uint256"},{"internalType":"address","name":"_user","type":"address"}],"name":"isOwner","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"songOwners","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"songs","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"string","name":"title","type":"string"},{"internalType":"string","name":"artistName","type":"string"},{"internalType":"string","name":"ipfsCid","type":"string"},{"internalType":"uint256","name":"price","type":"uint256"},{"internalType":"address payable","name":"artistWallet","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_title","type":"string"},{"internalType":"string","name":"_artistName","type":"string"},{"internalType":"string","name":"_ipfsCid","type":"string"},{"internalType":"uint256","name":"_price","type":"uint256"}],"name":"uploadSong","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
@@ -60,7 +60,7 @@
                     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                     userAccount = accounts[0];
 
-                    // Auto Switch Network
+                    // Auto Switch to SEPOLIA
                     const currentChainId = await web3.eth.getChainId();
                     if (Number(currentChainId) !== TARGET_CHAIN_ID) {
                         try {
@@ -72,7 +72,13 @@
                             if (switchError.code === 4902) {
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
-                                    params: [{ chainId: web3.utils.toHex(TARGET_CHAIN_ID), chainName: 'Music Network', rpcUrls: [RPC_URL], nativeCurrency: { name: 'Token', symbol: 'ETH', decimals: 18 } }],
+                                    params: [{ 
+                                        chainId: web3.utils.toHex(TARGET_CHAIN_ID), 
+                                        chainName: 'Sepolia Testnet', 
+                                        rpcUrls: [RPC_URL], 
+                                        nativeCurrency: { name: 'SepoliaETH', symbol: 'ETH', decimals: 18 },
+                                        blockExplorerUrls: ['https://sepolia.etherscan.io']
+                                    }],
                                 });
                             }
                         }
@@ -117,7 +123,7 @@
                 await contract.methods.buySong(id).send({ from: userAccount, value: price });
                 alert("Bought! You own this song.");
                 loadSongs(); 
-            } catch (err) { alert("Transaction Failed"); }
+            } catch (err) { alert("Transaction Failed: " + err.message); }
         };
 
         window.playSong = (title, artist, cid) => {
@@ -125,7 +131,7 @@
             document.getElementById('pTitle').innerText = title;
             document.getElementById('pArtist').innerText = artist;
             const audio = document.getElementById('audioElement');
-            audio.src = `https://ipfs.io/ipfs/${cid}`; // Gateway Stabil
+            audio.src = `https://ipfs.io/ipfs/${cid}`; 
             audio.play().catch(e => alert("Audio Error: " + e.message));
         }
     </script>
